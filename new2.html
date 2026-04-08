@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SpendWise — Budget Tracker + SIP + Reports</title>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg: #f3f6ff;
+    --card: #ffffff;
+    --text: #071133;
+    --muted: rgba(9,16,44,0.6);
+    --accent: #4f46e5;
+    --accent2: #7c3aed;
+    --danger: #ef4444;
+    --radius: 12px;
+    --pad: 14px;
+  }
+  *{box-sizing:border-box}
+  body{font-family:"Poppins",sans-serif;margin:0;background:var(--bg);color:var(--text);padding:18px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1200px;margin:0 auto}
+  .h-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:white;font-weight:800}
+  h1{margin:0;font-size:20px}
+  .subtitle{color:var(--muted);font-size:13px}
+  .glass{background:var(--card);border-radius:var(--radius);padding:var(--pad);box-shadow:0 12px 30px rgba(9,20,60,0.06);border:1px solid rgba(0,0,0,0.03)}
+  .row{display:flex;gap:12px}
+  .col{display:flex;flex-direction:column;gap:8px}
+  .btn{padding:10px 12px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent2));color:white;font-weight:700;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid rgba(9,16,44,0.06);color:var(--text);font-weight:700}
+  input, select{padding:10px;border-radius:8px;border:1px solid rgba(9,16,44,0.07);width:100%}
+  .small{font-size:13px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:18px;margin-top:16px}
+  @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+  .expense-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;margin-top:8px;border:1px solid rgba(9,16,44,0.04)}
+  .tag{padding:6px 8px;border-radius:8px;color:white;font-weight:700;font-size:12px}
+  .food{background:#fb7185} .travel{background:#f59e0b} .shop{background:#60a5fa} .recharge{background:#a3e635} .rent{background:#34d399} .others{background:#c084fc}
+  .progress{height:10px;background:rgba(79,70,229,0.08);border-radius:999px;overflow:hidden}
+  .bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%}
+  .footer{margin-top:18px;text-align:center;color:var(--muted);font-size:13px}
+  canvas{max-width:100%;height:260px}
+  .lead{font-weight:800;font-size:18px}
+
+  /* dark theme */
+  body.theme-dark{
+    --bg: #071022;
+    --card: rgba(10,12,20,0.6);
+    --text: #e7eef8;
+    --muted: rgba(231,238,248,0.6);
+    --accent: #5eead4;
+    --accent2: #60a5fa;
+    background: linear-gradient(180deg,#02040a,#071022 50%);
+  }
+
+  .slider{width:100%}
+  .cat-card{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.6),rgba(255,255,255,0.45));border:1px solid rgba(255,255,255,0.06)}
+  .flex-between{display:flex;justify-content:space-between;align-items:center}
+  .muted{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="h-row">
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="logo">SW</div>
+      <div>
+        <h1>SpendWise</h1>
+        <div class="subtitle">Budget tracker • SIP • Reports</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="themeToggle" class="btn ghost">Toggle Theme</button>
+      <button class="btn ghost" onclick="exportCSV()">Export CSV</button>
+      <button class="btn ghost" onclick="clearAll()">Clear Data</button>
+    </div>
+  </header>
+
+  <section class="glass" style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div>
+      <div class="small">Viewing</div>
+      <div class="lead" id="monthLabel"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center">
+      <label class="small">Select month</label>
+      <input id="monthSelector" type="month" />
+      <label class="small">Total spent</label>
+      <div id="totalSpent" class="lead">₹0</div>
+    </div>
+  </section>
+
+  <div style="margin-top:12px" class="glass">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="showSection('add')">➕ Add Expense</button>
+      <button class="btn ghost" onclick="showSection('reports')">📊 Reports</button>
+      <button class="btn ghost" onclick="showSection('insights')">💡 Insights</button>
+      <button class="btn ghost" onclick="showSection('sip')">📈 SIP Calculator</button>
+      <button class="btn ghost" onclick="showSection('budgets')">📂 Budgets</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT COLUMN -->
+    <div class="leftCol">
+
+      <!-- ADD EXPENSE -->
+      <div id="add" class="glass" style="margin-top:12px">
+        <h3 style="margin:0 0 8px 0">Add Expense</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input id="amount" type="number" placeholder="Amount (₹)" />
+          <select id="category">
+            <option>Food</option>
+            <option>Travel</option>
+            <option>Shopping</option>
+            <option>Recharge</option>
+            <option>Rent</option>
+            <option>Others</option>
+          </select>
+          <input id="note" placeholder="Note (optional)" />
+          <input id="date" type="date" />
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="addExpense()">Save</button>
+            <button class="btn ghost" onclick="resetForm()">Reset</button>
+            <button class="btn ghost" onclick="showSection('reports')">View Reports</button>
+          </div>
+        </div>
+
+        <div id="expenseList" style="margin-top:12px"></div>
+      </div>
+
+      <!-- SIP -->
+      <div id="sip" class="glass" style="margin-top:12px;display:none">
+        <h3 style="margin:0 0 8px 0">SIP Calculator</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:460px">
+          <input id="sip_monthly" type="number" placeholder="Monthly investment (₹)" />
+          <input id="sip_years" type="number" placeholder="Investment period (years)" />
+          <input id="sip_rate" type="number" placeholder="Expected annual return (%)" />
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="calculateSIP()">Calculate</button>
+            <button class="btn ghost" onclick="resetSIP()">Reset</button>
+          </div>
+          <div id="sip_result" style="display:none">
+            <div class="glass" style="padding:12px">
+              <div id="sip_invested" class="small"></div>
+              <div id="sip_value" class="small"></div>
+              <div id="sip_gains" class="small"></div>
+            </div>
+            <canvas id="sipChart" style="margin-top:8px"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUDGETS (sliders + autosplit) -->
+      <div id="budgets" class="glass" style="margin-top:12px;display:none">
+        <h3 style="margin:0 0 8px 0">Category Budgets</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="totalBudgetInput" type="number" placeholder="Enter total monthly budget (₹)" style="width:220px"/>
+          <select id="budgetMode"><option value="manual">Manual</option><option value="auto">Auto-Split</option></select>
+          <button class="btn ghost" onclick="applyAutoSplit()">Apply Auto-Split</button>
+          <button class="btn" onclick="saveBudgets()">Save Budgets</button>
+        </div>
+
+        <div id="catControls" style="margin-top:12px"></div>
+
+        <div id="catOverviewHolder" style="margin-top:12px"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="rightCol">
+
+      <!-- REPORTS -->
+      <div id="reports" class="glass" style="display:none">
+        <h3 style="margin-top:0">Reports</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:300px">
+            <canvas id="pieChart"></canvas>
+          </div>
+          <div style="flex:1;min-width:300px">
+            <canvas id="lineChart"></canvas>
+          </div>
+        </div>
+        <div style="margin-top:12px" class="small muted">Daily breakdown for selected month (each day displayed)</div>
+      </div>
+
+      <!-- INSIGHTS -->
+      <div id="insights" class="glass" style="margin-top:12px;display:none">
+        <h3 style="margin-top:0">Insights</h3>
+        <div id="insightsContainer" class="small muted"></div>
+      </div>
+
+      <!-- QUICK TIPS -->
+      <div class="glass" style="margin-top:12px">
+        <h4 style="margin:0 0 8px 0">Money Tips</h4>
+        <ul style="margin:0;color:var(--muted)">
+          <li>Plan monthly food budget & cook more.</li>
+          <li>Use discounts for subscriptions.</li>
+          <li>Track subscriptions & cancel unused ones.</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">SpendWise • LocalStorage • Built-for-demo</div>
+</div>
+
+<script>
+/* -------------------------
+   Storage keys & constants
+   ------------------------- */
+const STORAGE_KEY = 'spendwise_expenses_v2';
+const STORAGE_BUDGET_KEY = 'spendwise_budgets_v2';
+const STORAGE_THEME = 'spendwise_theme_v2';
+const CATEGORIES = ['Food','Travel','Shopping','Recharge','Rent','Others'];
+
+/* -------------------------
+   State
+   ------------------------- */
+let expenses = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let catBudget = JSON.parse(localStorage.getItem(STORAGE_BUDGET_KEY) || '{}');
+let sipChart = null, pieChart = null, lineChart = null;
+
+/* -------------------------
+   Helpers
+   ------------------------- */
+function formatINR(n){ return '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0}); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function monthLabelFromInput(val){
+  if(!val) return '';
+  const [y,m] = val.split('-');
+  return new Date(y,m-1,1).toLocaleString(undefined,{month:'long', year:'numeric'});
+}
+function parseMonthInput(val){ // returns {year, monthIndex}
+  if(!val){ const d=new Date(); return {year:d.getFullYear(), month:d.getMonth()}; }
+  const [y,m] = val.split('-'); return {year: Number(y), month: Number(m)-1};
+}
+
+/* -------------------------
+   Theme
+   ------------------------- */
+let currentTheme = localStorage.getItem(STORAGE_THEME) || 'light';
+function applyTheme(t){
+  if(t === 'dark') document.body.classList.add('theme-dark'); else document.body.classList.remove('theme-dark');
+  currentTheme = t; localStorage.setItem(STORAGE_THEME, t);
+}
+document.getElementById('themeToggle').addEventListener('click', ()=> applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+applyTheme(currentTheme);
+
+/* -------------------------
+   Month selector init
+   ------------------------- */
+const monthSelector = document.getElementById('monthSelector');
+(function setDefaultMonth(){
+  const now = new Date();
+  monthSelector.value = now.toISOString().slice(0,7);
+  document.getElementById('monthLabel').innerText = monthLabelFromInput(monthSelector.value);
+})();
+monthSelector.addEventListener('change', ()=>{ document.getElementById('monthLabel').innerText = monthLabelFromInput(monthSelector.value); refreshAll(); });
+
+/* -------------------------
+   Expense functions
+   ------------------------- */
+function saveExpenses(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses)); }
+function saveBudgetsToStorage(){ localStorage.setItem(STORAGE_BUDGET_KEY, JSON.stringify(catBudget)); }
+
+function addExpense(){
+  const amt = Number(document.getElementById('amount').value);
+  const cat = document.getElementById('category').value;
+  const note = document.getElementById('note').value;
+  const date = document.getElementById('date').value || todayISO();
+  if(!amt || amt <= 0){ alert('Enter valid amount'); return; }
+  const id = 'e_' + Date.now();
+  expenses.push({ id, amount: amt, category: cat, note, date });
+  saveExpenses(); resetForm(); refreshAll();
+}
+function deleteExpense(id){
+  if(!confirm('Delete this expense?')) return;
+  expenses = expenses.filter(e=>e.id!==id); saveExpenses(); refreshAll();
+}
+function resetForm(){ document.getElementById('amount').value=''; document.getElementById('note').value=''; document.getElementById('date').value = todayISO(); }
+
+/* -------------------------
+   Filters & aggregations
+   ------------------------- */
+function getExpensesForMonth(year, monthIndex){
+  return expenses.filter(e=>{
+    const d = new Date(e.date);
+    return d.getFullYear() === year && d.getMonth() === monthIndex;
+  });
+}
+
+/* -------------------------
+   Render expense list (for selected month)
+   ------------------------- */
+function renderList(){
+  const sel = parseMonthInput(monthSelector.value);
+  const listHolder = document.getElementById('expenseList'); listHolder.innerHTML = '';
+  const monthly = getExpensesForMonth(sel.year, sel.month);
+  if(monthly.length === 0){ listHolder.innerHTML = '<div class="small muted">No expenses for this month yet.</div>'; return; }
+  monthly.slice().reverse().forEach(e=>{
+    const row = document.createElement('div'); row.className = 'expense-row';
+    row.innerHTML = `
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="tag ${tagClass(e.category)}">${e.category}</div>
+        <div>
+          <div style="font-weight:700">${formatINR(e.amount)}</div>
+          <div class="small muted">${e.note || ''} • ${e.date}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <button class="btn ghost" onclick='deleteExpense("${e.id}")'>Delete</button>
+      </div>
+    `;
+    listHolder.appendChild(row);
+  });
+}
+
+/* -------------------------
+   Tag class helper
+   ------------------------- */
+function tagClass(cat){
+  if(cat==='Food') return 'food';
+  if(cat==='Travel') return 'travel';
+  if(cat==='Shopping') return 'shop';
+  if(cat==='Recharge') return 'recharge';
+  if(cat==='Rent') return 'rent';
+  return 'others';
+}
+
+/* -------------------------
+   Charts init
+   ------------------------- */
+function initCharts(){
+  const pieCtx = document.getElementById('pieChart').getContext('2d');
+  const lineCtx = document.getElementById('lineChart').getContext('2d');
+  pieChart = new Chart(pieCtx,{
+    type:'doughnut',
+    data:{ labels:CATEGORIES, datasets:[{ data:CATEGORIES.map(_=>0), backgroundColor:['#fb7185','#f59e0b','#60a5fa','#a3e635','#34d399','#c084fc'] }]},
+    options:{ plugins:{legend:{position:'bottom'}}}
+  });
+  lineChart = new Chart(lineCtx,{
+    type:'line',
+    data:{ labels:[], datasets:[{ label:'Daily spend (₹)', data:[], fill:true, backgroundColor:'rgba(79,70,229,0.12)', borderColor:'#4f46e5', tension:0.3 }]},
+    options:{ scales:{ y:{ beginAtZero:true }}}
+  });
+}
+
+/* -------------------------
+   Update reports (pie & daily line)
+   ------------------------- */
+function updateReports(){
+  const sel = parseMonthInput(monthSelector.value);
+  const monthly = getExpensesForMonth(sel.year, sel.month);
+
+  // pie totals
+  const catTotals = CATEGORIES.map(c => monthly.filter(m=>m.category===c).reduce((s,x)=>s+Number(x.amount),0));
+  pieChart.data.datasets[0].data = catTotals;
+  pieChart.update();
+
+  // daily totals
+  const daysInMonth = new Date(sel.year, sel.month+1, 0).getDate();
+  const dayTotals = Array(daysInMonth).fill(0);
+  monthly.forEach(e=>{
+    const d = new Date(e.date);
+    dayTotals[d.getDate()-1] += Number(e.amount);
+  });
+  lineChart.data.labels = Array.from({length:daysInMonth}, (_,i)=>String(i+1));
+  lineChart.data.datasets[0].data = dayTotals;
+  lineChart.update();
+
+  // total spent
+  const total = monthly.reduce((s,e)=>s+Number(e.amount),0);
+  document.getElementById('totalSpent').innerText = formatINR(total);
+
+  // category overview with progress vs budgets
+  renderCategoryOverview(catTotals);
+
+  // insights
+  renderInsights(total, monthly, sel, dayTotals);
+}
+
+/* -------------------------
+   Render insights
+   ------------------------- */
+function renderInsights(total, monthly, sel, dayTotals){
+  const container = document.getElementById('insightsContainer');
+  container.innerHTML = '';
+  if(monthly.length===0){ container.innerHTML = '<div class="small muted">No data — add expenses to get insights.</div>'; return; }
+  const daysPassed = new Date(sel.year, sel.month, new Date().getDate()).getDate();
+  const dailyAvg = Math.round(total / Math.max(1, (new Date().getFullYear()===sel.year && new Date().getMonth()===sel.month) ? new Date().getDate() : dayTotals.length));
+  const projected = Math.round(dailyAvg * new Date(sel.year, sel.month+1, 0).getDate());
+  const topIndex = CATEGORIES.map((c,i)=> [i, monthly.filter(m=>m.category===c).reduce((s,x)=>s+Number(x.amount),0)]).sort((a,b)=>b[1]-a[1])[0];
+  const topCat = topIndex ? CATEGORIES[topIndex[0]] : '—';
+  container.innerHTML = `<div style="font-weight:800">Top: ${topCat}</div><div class="small muted">Daily avg: ${formatINR(dailyAvg)} • Projected: ${formatINR(projected)}</div>`;
+}
+
+/* -------------------------
+   Category budgets rendering & autosplit
+   ------------------------- */
+function buildCatControls(){
+  const node = document.getElementById('catControls'); node.innerHTML = '';
+  CATEGORIES.forEach(cat=>{
+    const val = catBudget[cat] || 0;
+    const wrapper = document.createElement('div'); wrapper.style.marginTop = '10px';
+    wrapper.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center"><div class="small">${cat}</div><div class="small">₹ <span id="${cat}_val">${val}</span></div></div>
+      <input type="range" min="0" max="100000" value="${val}" data-cat="${cat}" class="slider">
+    `;
+    node.appendChild(wrapper);
+    const slider = wrapper.querySelector('input[type="range"]');
+    slider.addEventListener('input', e=>{
+      const v = e.target.value;
+      document.getElementById(cat + '_val').innerText = v;
+      catBudget[cat] = Number(v);
+    });
+  });
+  // ensure overview holder exists
+  if(!document.getElementById('catOverviewHolder')){
+    const holder = document.createElement('div'); holder.id='catOverviewHolder'; holder.style.marginTop='12px';
+    document.getElementById('catControls').appendChild(holder);
+  }
+}
+
+function applyAutoSplit(){
+  const total = Number(document.getElementById('totalBudgetInput').value) || 0;
+  if(!total){ alert('Enter a total budget value first'); return; }
+  // suggestion: Food 40, Travel 20, Shopping 15, Recharge 5, Rent 15, Others 5
+  catBudget = {
+    Food: Math.round(total*0.40),
+    Travel: Math.round(total*0.20),
+    Shopping: Math.round(total*0.15),
+    Recharge: Math.round(total*0.05),
+    Rent: Math.round(total*0.15),
+    Others: Math.round(total*0.05)
+  };
+  buildCatControls(); renderCategoryOverview(); saveBudgetsToStorage();
+}
+
+function saveBudgets(){
+  const total = Number(document.getElementById('totalBudgetInput').value) || 0;
+  // if manual adjustments already exist in catBudget, keep them; otherwise create default split if empty
+  if(Object.keys(catBudget).length===0 && total>0) applyAutoSplit();
+  saveBudgetsToStorage();
+  alert('Budgets saved');
+  renderCategoryOverview();
+}
+
+/* -------------------------
+   Render category overview (progress bars)
+   ------------------------- */
+function renderCategoryOverview(catTotals = null){
+  const holder = document.getElementById('catOverviewHolder');
+  holder.innerHTML = '';
+  // if catTotals not provided, compute for selected month
+  if(!catTotals){
+    const sel = parseMonthInput(monthSelector.value);
+    const monthly = getExpensesForMonth(sel.year, sel.month);
+    catTotals = CATEGORIES.map(c => monthly.filter(m=>m.category===c).reduce((s,x)=>s+Number(x.amount),0));
+  }
+  CATEGORIES.forEach((cat,i)=>{
+    const spent = catTotals[i] || 0;
+    const limit = catBudget[cat] || 0;
+    const perc = limit ? Math.min(100, (spent/limit)*100) : 0;
+    const remaining = limit - spent;
+    const div = document.createElement('div');
+    div.className = 'cat-card';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between"><div style="font-weight:700">${cat}</div><div style="font-weight:800">${formatINR(spent)} / ${limit?formatINR(limit):'—'}</div></div>
+      <div class="progress" style="margin-top:6px"><div class="bar" style="width:${perc}%"></div></div>
+      <div class="small" style="color:${remaining<0? 'var(--danger)': 'var(--muted)'}">Remaining: ${limit?formatINR(remaining):'—'}</div>
+      ${spent>limit && limit>0? `<div style="margin-top:6px;padding:8px;border-radius:8px;background:rgba(255,230,230,0.9);color:var(--danger);font-weight:700">Overspent in ${cat}!</div>` : ''}
+    `;
+    holder.appendChild(div);
+  });
+}
+
+/* -------------------------
+   SIP Calculator
+   ------------------------- */
+function calculateSIP(){
+  const P = Number(document.getElementById('sip_monthly').value);
+  const Y = Number(document.getElementById('sip_years').value);
+  const R = Number(document.getElementById('sip_rate').value);
+  if(!P || !Y || !R){ alert('Enter all SIP values'); return; }
+  const months = Y * 12;
+  const r = R / 12 / 100;
+  const fv = P * (((Math.pow(1 + r, months) - 1) / r) * (1 + r));
+  const invested = P * months;
+  const gains = fv - invested;
+  document.getElementById('sip_result').style.display = 'block';
+  document.getElementById('sip_invested').innerText = 'Total Invested: ' + formatINR(invested);
+  document.getElementById('sip_value').innerText = 'Estimated Value: ' + formatINR(Math.round(fv));
+  document.getElementById('sip_gains').innerText = 'Total Returns: ' + formatINR(Math.round(gains));
+
+  // build month-by-month series
+  const labels = []; const data = []; let running = 0;
+  for(let m=1;m<=months;m++){ running = running * (1 + r) + P; labels.push(String(m)); data.push(Math.round(running)); }
+
+  const ctx = document.getElementById('sipChart').getContext('2d');
+  if(sipChart) sipChart.destroy();
+  sipChart = new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:'Portfolio value (₹)', data, fill:true, backgroundColor:'rgba(79,70,229,0.12)', borderColor:'#4f46e5', tension:0.2 }] }, options:{ scales:{ y:{ beginAtZero:true } }, plugins:{legend:{display:false}} }});
+}
+function resetSIP(){ document.getElementById('sip_monthly').value=''; document.getElementById('sip_years').value=''; document.getElementById('sip_rate').value=''; document.getElementById('sip_result').style.display='none'; if(sipChart){ sipChart.destroy(); sipChart=null; } }
+
+/* -------------------------
+   Export & Clear
+   ------------------------- */
+function exportCSV(){
+  if(expenses.length === 0){ alert('No data to export'); return; }
+  let csv = 'id,date,amount,category,note\n';
+  expenses.forEach(e=> csv += `${e.id},${e.date},${e.amount},${e.category},"${(e.note||'').replace(/"/g,'""')}"\n`);
+  const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'spendwise_export.csv'; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function clearAll(){ if(!confirm('Clear saved data?')) return; localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_BUDGET_KEY); expenses = []; catBudget = {}; refreshAll(); }
+
+/* -------------------------
+   UI: show section
+   ------------------------- */
+function showSection(id){
+  ['add','reports','insights','sip','budgets'].forEach(s=>{
+    const el = document.getElementById(s);
+    if(el) el.style.display = (s === id) ? 'block' : 'none';
+  });
+  if(id === 'reports'){
+    if(!pieChart || !lineChart) initCharts();
+    updateReports();
+  }
+}
+
+/* -------------------------
+   Refresh all (render list & reports)
+   ------------------------- */
+function refreshAll(){
+  renderList();
+  if(!pieChart || !lineChart) initCharts();
+  updateReports();
+  buildCatControls();
+  renderCategoryOverview();
+}
+
+/* -------------------------
+   Init on load
+   ------------------------- */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // defaults
+  document.getElementById('date').value = todayISO();
+  if(!Object.keys(catBudget).length){
+    // set sensible defaults if empty
+    const defTotal = 5000;
+    catBudget = { Food:Math.round(defTotal*0.4), Travel:Math.round(defTotal*0.2), Shopping:Math.round(defTotal*0.15), Recharge:Math.round(defTotal*0.05), Rent:Math.round(defTotal*0.15), Others:Math.round(defTotal*0.05) };
+  }
+  initCharts();
+  refreshAll();
+  // show add by default
+  showSection('add');
+});
+</script>
+</body>
+</html>
